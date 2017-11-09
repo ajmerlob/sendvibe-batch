@@ -16,6 +16,7 @@ import email
 from apiclient import errors
 from apiclient.discovery import build
 
+logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 
 class Gmining:
   
@@ -34,8 +35,6 @@ class Gmining:
     return creds
 
   def refresh_auth(self):
-    print 'ISSUE: refreshing auth'
-    logging.error("ISSUE: refreshing auth")
     creds = self.build_creds()
     self.service = build('gmail', 'v1',credentials=creds)
 
@@ -45,13 +44,7 @@ class Gmining:
     for id_dict in json.loads(id_list['Body']):
   #    print email_id
       msg_id = (id_dict['id'])
-      try:
-        email = self.service.users().messages().get(userId='me', id=msg_id).execute()
-      except google.auth.exceptions.RefreshError:
-        self.refresh_auth()
-        email = self.service.users().messages().get(userId='me', id=msg_id).execute()
-        
-    
+      email = self.service.users().messages().get(userId='me', id=msg_id).execute()
       email['email_address'] = self.email_address
       send.append(email)
     return send
@@ -118,6 +111,7 @@ class Gmining:
       count += 1
       ## Buffer up the emails received
       email_data.extend(self.process_id_list(id_list))
+      self.refresh_auth()
       ## After each batch of messages, delete the message and sleep as needed
       self.sqs.delete_message(QueueUrl=self.QueueUrlIds  ,ReceiptHandle=id_list['ReceiptHandle'])
 
@@ -132,6 +126,7 @@ class Gmining:
 g = Gmining()    
 try:
   while True:
+    logging.error('starting gmining')
     g.read_queue()
 except AssertionError, e:
   logging.error( e)
