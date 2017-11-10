@@ -28,9 +28,10 @@ class Gmining:
   def build_creds(self):
     dynamodb = boto3.resource('dynamodb',region_name='us-west-2')
     table = dynamodb.Table('tokens')
-    dict_of_creds =  table.get_item(Key={"timestamp":self.timestamp})['Item']
+    dict_of_creds =  table.get_item(Key={"key":self.email_address})['Item']
     del dict_of_creds['timestamp']
-    assert u'refresh_token' in dict_of_creds and dict_of_creds['refresh_token'] != u"", "refresh token was missing or blank"
+    del dict_of_creds['key']
+    assert u'refresh_token' in dict_of_creds and dict_of_creds['refresh_token'] != u"" and dict_of_creds['refresh_token'] is not None, "refresh token was missing or blank"
     creds = google.oauth2.credentials.Credentials(**dict_of_creds)
     return creds
 
@@ -73,11 +74,12 @@ class Gmining:
 
     ## Open SQS and grab the queue name (which is the modded timestamp)
     logging.error('getting timestamp')
-    self.QueueUrlTimestamp = "https://sqs.us-west-2.amazonaws.com/985724320380/email_ids_to_download"
-    timestamp_message = self.sqs.receive_message(QueueUrl=self.QueueUrlTimestamp,MaxNumberOfMessages=1,WaitTimeSeconds=20)
-    self.rh = timestamp_message['Messages'][0]['ReceiptHandle']
-    self.sqs.delete_message(QueueUrl=self.QueueUrlTimestamp,ReceiptHandle=self.rh)
-    self.timestamp = timestamp_message['Messages'][0]['Body']
+    self.QueueUrlEmailAddress = "https://sqs.us-west-2.amazonaws.com/985724320380/email_ids_to_download"
+    email_address_message = self.sqs.receive_message(QueueUrl=self.QueueUrlEmailAddress,MaxNumberOfMessages=1,WaitTimeSeconds=20)
+    self.rh = email_address_message['Messages'][0]['ReceiptHandle']
+    self.sqs.delete_message(QueueUrl=self.QueueUrlEmailAddress,ReceiptHandle=self.rh)
+    self.email_address = json.loads(email_address_message['Messages'][0]['Body'])[0]
+    self.timestamp = json.loads(email_address_message['Messages'][0]['Body'])[1]
     self.QueueUrlIds = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp)
   
     ## Build resources for reading emails
@@ -87,13 +89,6 @@ class Gmining:
   ## Now that you've got the ids - go get the messages
     logging.error('accessing gmail')
     self.service = build('gmail', 'v1',credentials=self.creds)
-    try:
-      self.email_address = self.service.users().getProfile(userId='me').execute()['emailAddress']
-    except google.auth.exceptions.RefreshError, e:
-      logging.error( e)
-      raise Exception("{} was messed up".format(self.timestamp))
-      
-    logging.error(self.email_address)
   
   def attempt_read_queue(self):
     for attempt in range(3):
@@ -128,6 +123,7 @@ class Gmining:
     self.s3_list.append(key)
 
   def final_clean(self):
+    logging.error('sending to s3')
     for key in self.s3_list:
       self.send_to_s3(key)
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
