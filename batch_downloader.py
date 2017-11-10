@@ -86,7 +86,7 @@ class Gmining:
       
   ## Now that you've got the ids - go get the messages
     logging.error('accessing gmail')
-    self.service = build('gmail', 'v1',credentials=creds)
+    self.service = build('gmail', 'v1',credentials=self.creds)
     try:
       self.email_address = self.service.users().getProfile(userId='me').execute()['emailAddress']
     except google.auth.exceptions.RefreshError, e:
