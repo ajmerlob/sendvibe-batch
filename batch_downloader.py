@@ -47,30 +47,18 @@ class Gmining:
       send.append(email)
     return send
 
-  def send_to_disk(self,email_data):
-    logging.error("saving to disk")
+  def send_to_s3(self,email_data):
+    logging.error("s3 connection - writing {} emails".format(len(email_data)))
+    print "s3 connection - writing {} emails".format(len(email_data))
     obj = "\n".join([json.dumps(e) for e in email_data])
     key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
-    with open(key,'wb') as outfile:
-      outfile.write(obj)
-    return key
-
-  def send_to_s3(self,filename):
-    with open(filename,'rb') as infile:
-      self.s3.put_object(Body=infile.read(),Bucket='email-data-full',Key=filename)
-
-#      logging.error("s3 connection - writing {} emails".format(len(email_data)))
-#      
-#      obj = "\n".join([json.dumps(e) for e in email_data])
-#      key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
-#      self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
+    self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
 
   def __init__(self):
     print 'starting init'
     logging.error('starting init')
     self.sqs = boto3.client('sqs',region_name='us-west-2')
     self.s3 = boto3.client('s3',region_name='us-west-2')
-    self.s3_list = []  
 
     ## Open SQS and grab the queue name (which is the modded timestamp)
     logging.error('getting timestamp')
@@ -79,6 +67,7 @@ class Gmining:
     self.rh = email_address_message['Messages'][0]['ReceiptHandle']
     self.sqs.delete_message(QueueUrl=self.QueueUrlEmailAddress,ReceiptHandle=self.rh)
     self.email_address = json.loads(email_address_message['Messages'][0]['Body'])[0]
+    logging.error(self.email_address)
     self.timestamp = json.loads(email_address_message['Messages'][0]['Body'])[1]
     self.QueueUrlIds = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp)
   
@@ -94,9 +83,11 @@ class Gmining:
     for attempt in range(3):
       try:
         list_of_id_lists = self.sqs.receive_message(QueueUrl=self.QueueUrlIds,MaxNumberOfMessages=10,WaitTimeSeconds=20)
+        print list_of_id_lists
         assert 'Messages' in list_of_id_lists, "Queue with ids was empty or returned nothing after 20 seconds - attempt {}".format(attempt+1)
         return list_of_id_lists
       except AssertionError, ae:
+        print ae
         logging.error(ae)
     return None
     
@@ -119,13 +110,9 @@ class Gmining:
       self.sqs.delete_message(QueueUrl=self.QueueUrlIds  ,ReceiptHandle=id_list['ReceiptHandle'])
 
     ## After all the reading, send buffer to S3
-    key = self.send_to_disk(email_data)
-    self.s3_list.append(key)
+    self.send_to_s3(email_data)
 
   def final_clean(self):
-    logging.error('sending to s3')
-    for key in self.s3_list:
-      self.send_to_s3(key)
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
     logging.error("deleted id-list queue (even if it had messages in it)")
     
@@ -136,6 +123,7 @@ try:
     logging.error('starting gmining')
     g.read_queue()
 except AssertionError, e:
+  print e
   logging.error( e)
 finally:
   g.final_clean()
