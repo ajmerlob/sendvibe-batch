@@ -31,12 +31,9 @@ class Gmining:
     dict_of_creds =  table.get_item(Key={"timestamp":self.timestamp})['Item']
     del dict_of_creds['timestamp']
     assert u'refresh_token' in dict_of_creds and dict_of_creds['refresh_token'] != u"", "refresh token was missing or blank"
-    creds = google_auth_oauthlib.flow.credentials = google.oauth2.credentials.Credentials(**dict_of_creds)
+    creds = google.oauth2.credentials.Credentials(**dict_of_creds)
     return creds
 
-  def refresh_auth(self):
-    creds = self.build_creds()
-    self.service = build('gmail', 'v1',credentials=creds)
 
   def process_id_list(self,id_list):
     send = []
@@ -49,19 +46,31 @@ class Gmining:
       send.append(email)
     return send
 
-  def send_to_s3(self,email_data):
-      logging.error("s3 connection - writing {} emails".format(len(email_data)))
-      
-      obj = "\n".join([json.dumps(e) for e in email_data])
-      key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
-      self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
+  def send_to_disk(self,email_data):
+    logging.error("saving to disk")
+    obj = "\n".join([json.dumps(e) for e in email_data])
+    key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
+    with open(key,'wb') as outfile:
+      outfile.write(obj)
+    return key
+
+  def send_to_s3(self,filename):
+    with open(filename,'rb') as infile:
+      self.s3.put_object(Body=infile.read(),Bucket='email-data-full',Key=filename)
+
+#      logging.error("s3 connection - writing {} emails".format(len(email_data)))
+#      
+#      obj = "\n".join([json.dumps(e) for e in email_data])
+#      key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
+#      self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
 
   def __init__(self):
     print 'starting init'
     logging.error('starting init')
     self.sqs = boto3.client('sqs',region_name='us-west-2')
     self.s3 = boto3.client('s3',region_name='us-west-2')
-  
+    self.s3_list = []  
+
     ## Open SQS and grab the queue name (which is the modded timestamp)
     logging.error('getting timestamp')
     self.QueueUrlTimestamp = "https://sqs.us-west-2.amazonaws.com/985724320380/email_ids_to_download"
@@ -73,7 +82,7 @@ class Gmining:
   
     ## Build resources for reading emails
     logging.error('building credentials')
-    creds = self.build_creds()
+    self.creds = self.build_creds()
       
   ## Now that you've got the ids - go get the messages
     logging.error('accessing gmail')
@@ -111,14 +120,16 @@ class Gmining:
       count += 1
       ## Buffer up the emails received
       email_data.extend(self.process_id_list(id_list))
-      self.refresh_auth()
       ## After each batch of messages, delete the message and sleep as needed
       self.sqs.delete_message(QueueUrl=self.QueueUrlIds  ,ReceiptHandle=id_list['ReceiptHandle'])
 
     ## After all the reading, send buffer to S3
-    self.send_to_s3(email_data)
+    key = self.send_to_disk(email_data)
+    self.s3_list.append(key)
 
   def final_clean(self):
+    for key in self.s3_list:
+      self.send_to_s3(key)
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
     logging.error("deleted id-list queue (even if it had messages in it)")
     
