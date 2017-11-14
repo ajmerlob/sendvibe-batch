@@ -67,16 +67,21 @@ class Gmining:
     self.rh = email_address_message['Messages'][0]['ReceiptHandle']
     self.sqs.delete_message(QueueUrl=self.QueueUrlEmailAddress,ReceiptHandle=self.rh)
     
-    ## Toss in a queue item to the analysis queue
-    analysis_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
-    self.sqs.send_message(QueueUrl=analysis_queue_url,MessageBody=email_address_message['Messages'][0]['Body'])
-
     ## Set variables from the SQS message body
     self.email_address = json.loads(email_address_message['Messages'][0]['Body'])[0]
     logging.error(self.email_address)
     self.timestamp = json.loads(email_address_message['Messages'][0]['Body'])[1]
     self.QueueUrlIds = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp)
-    self.S3AnalysisUrl = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp) + "_analysis" 
+
+    ## Toss in a queue item to the analysis queues
+    ## The main queue just holds the NAME of the analysis queue
+    ## The analysis queue holds the S3 coordinates with the data
+    s3AnalysisQueueName = self.timestamp_mod(self.timestamp) + "_calc" 
+    analysis_main_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
+    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=s3AnalysisQueueName)
+    print s3AnalysisQueueName, len(s3AnalysisQueueName)
+    queue = self.sqs.create_queue(QueueName=s3AnalysisQueueName)
+    self.S3AnalysisUrl = queue['QueueUrl']
  
     ## Build resources for reading emails
     logging.error('building credentials')
