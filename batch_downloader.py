@@ -78,7 +78,7 @@ class Gmining:
     ## The analysis queue holds the S3 coordinates with the data
     s3AnalysisQueueName = self.timestamp_mod(self.timestamp) + "_calc" 
     analysis_main_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
-    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=s3AnalysisQueueName)
+    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=json.dumps({"name":s3AnalysisQueueName,"email_address":self.email_address}))
     print s3AnalysisQueueName, len(s3AnalysisQueueName)
     queue = self.sqs.create_queue(QueueName=s3AnalysisQueueName)
     self.S3AnalysisUrl = queue['QueueUrl']
