@@ -59,6 +59,7 @@ class Gmining:
     logging.error('starting init')
     self.sqs = boto3.client('sqs',region_name='us-west-2')
     self.s3 = boto3.client('s3',region_name='us-west-2')
+    self.batch = boto3.client('batch',region_name='us-west-2')
 
     ## Open SQS and grab the queue name (which is the modded timestamp)
     logging.error('getting timestamp')
@@ -127,6 +128,7 @@ class Gmining:
   def final_clean(self):
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
     logging.error("deleted id-list queue (even if it had messages in it)")
+    self.batch.submit_job(jobName=self.timestamp_mod(self.timestamp),jobQueue='sendvibe_analysis_queue',jobDefinition="sendvibe_analysis_job:2")
     
 
 g = Gmining()    
