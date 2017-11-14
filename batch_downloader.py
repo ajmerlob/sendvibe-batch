@@ -49,13 +49,13 @@ class Gmining:
 
   def send_to_s3(self,email_data):
     logging.error("s3 connection - writing {} emails".format(len(email_data)))
-    print "s3 connection - writing {} emails".format(len(email_data))
     obj = "\n".join([json.dumps(e) for e in email_data])
     key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
     self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
+    self.sqs.send_message(QueueUrl=self.S3AnalysisUrl,MessageBody=key)
 
   def __init__(self):
-    print 'starting init'
+    #print 'starting init'
     logging.error('starting init')
     self.sqs = boto3.client('sqs',region_name='us-west-2')
     self.s3 = boto3.client('s3',region_name='us-west-2')
@@ -66,11 +66,18 @@ class Gmining:
     email_address_message = self.sqs.receive_message(QueueUrl=self.QueueUrlEmailAddress,MaxNumberOfMessages=1,WaitTimeSeconds=20)
     self.rh = email_address_message['Messages'][0]['ReceiptHandle']
     self.sqs.delete_message(QueueUrl=self.QueueUrlEmailAddress,ReceiptHandle=self.rh)
+    
+    ## Toss in a queue item to the analysis queue
+    analysis_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
+    self.sqs.send_message(QueueUrl=analysis_queue_url,MessageBody=email_address_message['Messages'][0]['Body'])
+
+    ## Set variables from the SQS message body
     self.email_address = json.loads(email_address_message['Messages'][0]['Body'])[0]
     logging.error(self.email_address)
     self.timestamp = json.loads(email_address_message['Messages'][0]['Body'])[1]
     self.QueueUrlIds = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp)
-  
+    self.S3AnalysisUrl = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp) + "_analysis" 
+ 
     ## Build resources for reading emails
     logging.error('building credentials')
     self.creds = self.build_creds()
@@ -83,11 +90,11 @@ class Gmining:
     for attempt in range(3):
       try:
         list_of_id_lists = self.sqs.receive_message(QueueUrl=self.QueueUrlIds,MaxNumberOfMessages=10,WaitTimeSeconds=20)
-        print list_of_id_lists
+        #print list_of_id_lists
         assert 'Messages' in list_of_id_lists, "Queue with ids was empty or returned nothing after 20 seconds - attempt {}".format(attempt+1)
         return list_of_id_lists
       except AssertionError, ae:
-        print ae
+        #print ae
         logging.error(ae)
     return None
     
@@ -123,7 +130,7 @@ try:
     logging.error('starting gmining')
     g.read_queue()
 except AssertionError, e:
-  print e
+  #print e
   logging.error( e)
 finally:
   g.final_clean()
