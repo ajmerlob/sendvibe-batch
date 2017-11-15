@@ -75,11 +75,8 @@ class Gmining:
     self.QueueUrlIds = "https://sqs.us-west-2.amazonaws.com/985724320380/" + self.timestamp_mod(self.timestamp)
 
     ## Toss in a queue item to the analysis queues
-    ## The main queue just holds the NAME of the analysis queue
     ## The analysis queue holds the S3 coordinates with the data
     s3AnalysisQueueName = self.timestamp_mod(self.timestamp) + "_calc" 
-    analysis_main_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
-    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=json.dumps({"name":s3AnalysisQueueName,"email_address":self.email_address}))
     print s3AnalysisQueueName, len(s3AnalysisQueueName)
     queue = self.sqs.create_queue(QueueName=s3AnalysisQueueName)
     self.S3AnalysisUrl = queue['QueueUrl']
@@ -126,6 +123,11 @@ class Gmining:
     self.send_to_s3(email_data)
 
   def final_clean(self):
+    ## The main queue holds the name of the queue the analysis batch should read
+    analysis_main_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
+    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=json.dumps({"name":s3AnalysisQueueName,"email_address":self.email_address}))
+
+
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
     logging.error("deleted id-list queue (even if it had messages in it)")
     self.batch.submit_job(jobName=self.timestamp_mod(self.timestamp),jobQueue='sendvibe_analysis_queue',jobDefinition="sendvibe_analysis_job:4")
