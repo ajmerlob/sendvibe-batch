@@ -128,7 +128,8 @@ class Gmining:
   def final_clean(self):
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
     logging.error("deleted id-list queue (even if it had messages in it)")
-    self.batch.submit_job(jobName=self.timestamp_mod(self.timestamp),jobQueue='sendvibe_analysis_queue',jobDefinition="sendvibe_analysis_job:2")
+    self.batch.submit_job(jobName=self.timestamp_mod(self.timestamp),jobQueue='sendvibe_analysis_queue',jobDefinition="sendvibe_analysis_job:4")
+    logging.error("submitted batch analysis job")
     
 
 g = Gmining()    
