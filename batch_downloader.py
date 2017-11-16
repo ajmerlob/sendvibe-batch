@@ -76,9 +76,9 @@ class Gmining:
 
     ## Toss in a queue item to the analysis queues
     ## The analysis queue holds the S3 coordinates with the data
-    s3AnalysisQueueName = self.timestamp_mod(self.timestamp) + "_calc" 
-    print s3AnalysisQueueName, len(s3AnalysisQueueName)
-    queue = self.sqs.create_queue(QueueName=s3AnalysisQueueName)
+    self.s3AnalysisQueueName = self.timestamp_mod(self.timestamp) + "_calc" 
+    print self.s3AnalysisQueueName, len(self.s3AnalysisQueueName)
+    queue = self.sqs.create_queue(QueueName=self.s3AnalysisQueueName)
     self.S3AnalysisUrl = queue['QueueUrl']
  
     ## Build resources for reading emails
@@ -125,7 +125,7 @@ class Gmining:
   def final_clean(self):
     ## The main queue holds the name of the queue the analysis batch should read
     analysis_main_queue_url = "https://sqs.us-west-2.amazonaws.com/985724320380/email_analysis"
-    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=json.dumps({"name":s3AnalysisQueueName,"email_address":self.email_address}))
+    self.sqs.send_message(QueueUrl=analysis_main_queue_url,MessageBody=json.dumps({"name":self.s3AnalysisQueueName,"email_address":self.email_address}))
 
 
     self.sqs.delete_queue(QueueUrl=self.QueueUrlIds)
