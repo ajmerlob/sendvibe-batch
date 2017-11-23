@@ -50,7 +50,7 @@ class Gmining:
   def send_to_s3(self,email_data):
     logging.error("s3 connection - writing {} emails".format(len(email_data)))
     obj = "\n".join([json.dumps(e) for e in email_data])
-    key ="e{}.{}".format(self.timestamp_mod(self.timestamp),time.time())
+    key ="{}/e{}.{}".format(self.email_address,self.timestamp_mod(self.timestamp),time.time())
     self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
     self.sqs.send_message(QueueUrl=self.S3AnalysisUrl,MessageBody=key)
 

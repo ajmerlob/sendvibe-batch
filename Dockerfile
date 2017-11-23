@@ -1,7 +1,7 @@
 FROM ubuntu:16.04
 
 # Install dependencies
-RUN apt-get update -y
+RUN apt-get update && apt-get upgrade -y
 RUN apt-get install -y python-pip
 RUN pip install awscli --upgrade --user
 RUN pip install boto3 --upgrade --user
