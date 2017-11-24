@@ -53,6 +53,11 @@ class Gmining:
     key ="{}/e{}.{}".format(self.email_address,self.timestamp_mod(self.timestamp),time.time())
     self.s3.put_object(Body=obj,Bucket='email-data-full',Key=key)
     self.sqs.send_message(QueueUrl=self.S3AnalysisUrl,MessageBody=key)
+    if self.first_run:
+      logging.error("sending first run for setup")
+      self.s3.put_object(Body=obj,Bucket='email-data-first-run',Key=self.email_address)
+      self.first_run = False
+      self.sns.publish(Message=self.email_address)
 
   def __init__(self):
     #print 'starting init'
@@ -60,7 +65,9 @@ class Gmining:
     self.sqs = boto3.client('sqs',region_name='us-west-2')
     self.s3 = boto3.client('s3',region_name='us-west-2')
     self.batch = boto3.client('batch',region_name='us-west-2')
-
+    self.sns = boto3.resource('sns', region_name='us-west-2').Topic('arn:aws:sns:us-west-2:985724320380:sendvibe-user-setup')
+    self.first_run = True
+ 
     ## Open SQS and grab the queue name (which is the modded timestamp)
     logging.error('getting timestamp')
     self.QueueUrlEmailAddress = "https://sqs.us-west-2.amazonaws.com/985724320380/email_ids_to_download"
